@@ -1,0 +1,6 @@
+{
+  "name": "Show Verse",
+  "description": "A futuristic video streaming platform with ambient cinematic player, resume playback, offline downloads hub, and Firestore creator studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

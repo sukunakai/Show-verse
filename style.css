@@ -1,0 +1,255 @@
+/* ========================================================
+   SHOW VERSE - VIDEO PLAYER & CONTROLS STYLES
+   ======================================================== */
+
+/* High z-index hierarchy for video player controls */
+#playerModal {
+  z-index: 9999;
+}
+
+#playerTopBar {
+  z-index: 40;
+  position: relative;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#playerBottomBar {
+  z-index: 40;
+  position: relative;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#playerStageContainer {
+  z-index: 20;
+}
+
+/* Small Unlock Button Quietly on the Corner */
+#smallUnlockBtn {
+  z-index: 60;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s ease;
+}
+
+#smallUnlockBtn:hover {
+  transform: scale(1.05);
+}
+
+#smallUnlockBtn:active {
+  transform: scale(0.95);
+}
+
+/* Modals inside player */
+#audioSubModal,
+#qualityModal {
+  z-index: 70;
+}
+
+/* Fullscreen Mode Container & Controls */
+#playerModal:fullscreen,
+#playerModal:-webkit-full-screen,
+#playerModal:-moz-full-screen,
+#playerModal:-ms-fullscreen,
+#playerModal.is-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background-color: #000 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  overflow: hidden !important;
+}
+
+#playerModal:fullscreen #playerStageContainer,
+#playerModal:-webkit-full-screen #playerStageContainer,
+#playerModal:-moz-full-screen #playerStageContainer,
+#playerModal:-ms-fullscreen #playerStageContainer,
+#playerModal.is-fullscreen #playerStageContainer {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1 1 0% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#playerModal:fullscreen #playerStage,
+#playerModal:-webkit-full-screen #playerStage,
+#playerModal:-moz-full-screen #playerStage,
+#playerModal:-ms-fullscreen #playerStage,
+#playerModal.is-fullscreen #playerStage {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+  aspect-ratio: auto !important;
+  box-shadow: none !important;
+}
+
+#playerModal:fullscreen #mainVideo,
+#playerModal:-webkit-full-screen #mainVideo,
+#playerModal:-moz-full-screen #mainVideo,
+#playerModal:-ms-fullscreen #mainVideo,
+#playerModal.is-fullscreen #mainVideo {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100vh !important;
+  object-fit: contain !important;
+}
+
+/* Landscape mobile optimization */
+@media (orientation: landscape) and (max-height: 520px) {
+  #playerModal {
+    padding: 0 !important;
+  }
+  #playerTopBar {
+    padding: 0.5rem 1.25rem !important;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.5) 70%, transparent 100%) !important;
+  }
+  #playerBottomBar {
+    padding: 0.5rem 1.25rem !important;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.65) 70%, transparent 100%) !important;
+  }
+  #playerStageContainer {
+    padding: 0 !important;
+  }
+  #playerStage {
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    aspect-ratio: auto !important;
+  }
+  #playerBottomBar .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.25rem !important;
+  }
+}
+
+/* Category Horizontal Sliders */
+.category-slider-row {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.category-slider-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* YouTube-Style Embedded Player Stage & Ambient Glow */
+.yt-player-glow {
+  box-shadow: 0 20px 60px -15px rgba(0, 240, 255, 0.25), 0 0 40px -10px rgba(112, 0, 255, 0.25);
+  transition: box-shadow 0.4s ease;
+}
+
+#ytPlayerStage:fullscreen,
+#ytPlayerStage:-webkit-full-screen {
+  border-radius: 0 !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border: none !important;
+}
+
+#ytPlayerStage:fullscreen #ytVideo,
+#ytPlayerStage:-webkit-full-screen #ytVideo {
+  object-fit: contain !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Audio Equalizer Bars for Active Episode */
+@keyframes eqBounce {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+.eq-bar-1 { animation: eqBounce 0.8s ease-in-out infinite; }
+.eq-bar-2 { animation: eqBounce 0.8s ease-in-out 0.2s infinite; }
+.eq-bar-3 { animation: eqBounce 0.8s ease-in-out 0.4s infinite; }
+
+/* Sticky Top Category Navigation */
+#topCategoryBar {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Compact Episode Selector Buttons */
+.episode-selector-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.episode-selector-btn.is-active {
+  border-color: #00F0FF !important;
+  color: #00F0FF !important;
+  background-color: rgba(0, 240, 255, 0.18) !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.6), inset 0 0 10px rgba(0, 240, 255, 0.2) !important;
+  transform: scale(1.06);
+}
+
+/* ========================================================
+   DOUBLE-TAP SKIP INDICATOR OVERLAYS (+10s / -10s)
+   ======================================================== */
+#playerStage,
+#ytPlayerStage {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.skip-indicator-overlay {
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 35 !important;
+  pointer-events: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.skip-indicator-overlay.skip-left {
+  left: 2rem !important;
+}
+
+.skip-indicator-overlay.skip-right {
+  right: 2rem !important;
+}
+
+.skip-indicator-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.4), inset 0 0 10px rgba(0, 240, 255, 0.15);
+  color: #00F0FF;
+  font-family: monospace;
+  font-weight: 900;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.skip-indicator-overlay.animate-skip-left {
+  opacity: 1 !important;
+  transform: translateY(-50%) translateX(-6px) scale(1.05) !important;
+}
+
+.skip-indicator-overlay.animate-skip-right {
+  opacity: 1 !important;
+  transform: translateY(-50%) translateX(6px) scale(1.05) !important;
+}
+

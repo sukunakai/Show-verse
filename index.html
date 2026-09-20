@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Show Verse - Stream Anime, Kdrama, C-Drama & 4K Movies</title>
+  <meta name="description" content="Next-gen streaming experience for Anime, Kdrama, Chinese Drama, and 4K Movies with ambient glow and dynamic Firestore synchronization." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300F0FF'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>" />
+
+  <!-- Google Fonts: Syne & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Universal circular structure protection for JSON.stringify and console logging -->
+  <script>
+    (function() {
+      const nativeStringify = JSON.stringify;
+      JSON.stringify = function(value, replacer, space) {
+        const seen = new WeakSet();
+        const circularReplacer = function(key, val) {
+          if (typeof val === 'object' && val !== null) {
+            if (seen.has(val)) {
+              return undefined; // skip circular reference safely
+            }
+            seen.add(val);
+          }
+          if (typeof replacer === 'function') {
+            return replacer.call(this, key, val);
+          }
+          return val;
+        };
+        try {
+          return nativeStringify(value, circularReplacer, space);
+        } catch (e) {
+          try {
+            return nativeStringify(String(value));
+          } catch (inner) {
+            return '""';
+          }
+        }
+      };
+
+      // Wrap console methods to prevent circular errors from breaking devtools/iframe wrappers
+      ['log', 'warn', 'error', 'info', 'debug'].forEach(function(method) {
+        const originalConsole = console[method];
+        if (typeof originalConsole === 'function') {
+          console[method] = function(...args) {
+            const sanitized = args.map(arg => {
+              if (arg instanceof Error) {
+                return arg.message || String(arg);
+              }
+              if (typeof arg === 'object' && arg !== null) {
+                try {
+                  JSON.stringify(arg);
+                  return arg;
+                } catch (_) {
+                  return String(arg);
+                }
+              }
+              return arg;
+            });
+            return originalConsole.apply(console, sanitized);
+          };
+        }
+      });
+    })();
+  </script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- HLS.js for .m3u8 adaptive streaming support -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              cyan: '#00F0FF',
+              magenta: '#FF003C',
+              purple: '#7000FF',
+              dark: '#07090E',
+              card: '#0D111A',
+              border: '#1E2638'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Syne"', 'sans-serif']
+          },
+          boxShadow: {
+            'neon-cyan': '0 0 25px rgba(0, 240, 255, 0.45)',
+            'neon-magenta': '0 0 25px rgba(255, 0, 60, 0.45)',
+            'neon-ambient': '0 0 80px rgba(0, 240, 255, 0.25)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #07090E; }
+    ::-webkit-scrollbar-thumb { background: #1E2638; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00F0FF; }
+
+    /* Glassmorphism Classes */
+    .glass-card {
+      background: rgba(13, 17, 26, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-nav {
+      background: rgba(7, 9, 14, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .text-gradient {
+      background: linear-gradient(135deg, #FFFFFF 20%, #00F0FF 70%, #7000FF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    /* Ambient Glow Dynamic Behind Video */
+    .ambient-glow-box {
+      box-shadow: 0 0 90px 20px rgba(0, 240, 255, 0.35);
+      transition: box-shadow 0.5s ease-in-out;
+    }
+
+    /* Subtitle Styling */
+    ::cue {
+      background: rgba(0, 0, 0, 0.85);
+      color: #00F0FF;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+      font-size: 1.1rem;
+      border-radius: 6px;
+    }
+
+    /* Range slider custom thumb */
+    input[type=range]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00F0FF;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00F0FF;
+    }
+
+    /* Tilt 3D Hover Effect on Cards */
+    .tilt-card {
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease;
+    }
+    .tilt-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      box-shadow: 0 15px 35px -10px rgba(0, 240, 255, 0.25);
+    }
+    
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+
+  <!-- Show Verse Video Player & Fullscreen/Landscape Styles -->
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-brand-dark text-slate-100 font-sans antialiased selection:bg-brand-cyan selection:text-black min-h-screen">
+
+  <!-- TOP NAVIGATION BAR (ONLY LOGO ON LEFT & ME AVATAR ON RIGHT) -->
+  <header id="mainNav" class="fixed top-0 left-0 right-0 z-40 glass-nav transition-all duration-300 px-4 md:px-12 py-3.5 flex items-center justify-between">
+    <!-- Brand Logo (Left) -->
+    <a href="#" onclick="filterCategoryView('All')" class="flex items-center gap-2.5 group">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-cyan via-brand-purple to-brand-magenta p-0.5 shadow-neon-cyan group-hover:scale-105 transition duration-300">
+        <div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center">
+          <i data-lucide="play" class="w-4 h-4 text-brand-cyan fill-brand-cyan"></i>
+        </div>
+      </div>
+      <span class="text-xl font-black tracking-wider text-white">SHOW<span class="text-brand-cyan">VERSE</span></span>
+    </a>
+
+    <!-- User Profile (Me) Avatar (Right) -->
+    <div class="flex items-center">
+      <button id="profileMenuBtn" onclick="openMeModal()" class="flex items-center gap-2.5 p-1.5 pl-2 pr-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-brand-cyan/40 transition cursor-pointer" title="Profile (Me)">
+        <div class="w-7 h-7 rounded-full bg-gradient-to-r from-cyan-400 to-indigo-500 flex items-center justify-center font-bold text-xs text-black" id="navAvatar">
+          V
+        </div>
+        <span class="text-xs font-semibold hidden sm:inline text-slate-200" id="navUsername">Me</span>
+        <i data-lucide="user" class="w-3.5 h-3.5 text-slate-400"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- TOP CATEGORY FILTER BAR (PLACED AT VERY TOP ABOVE HERO BANNER) -->
+  <nav id="topCategoryBar" class="fixed top-[60px] left-0 right-0 z-30 bg-brand-dark/90 backdrop-blur-xl border-b border-white/10 px-4 md:px-12 py-2.5 transition-all duration-300">
+    <div class="flex items-center justify-between gap-3 max-w-7xl mx-auto">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5" id="categoryChipsContainer">
+        <button onclick="filterCategoryView('All')" id="chip-All" class="category-filter-chip active px-4 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-2 bg-brand-cyan text-black shadow-neon-cyan whitespace-nowrap cursor-pointer">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> All
+        </button>
+        <button onclick="filterCategoryView('Kdrama')" id="chip-Kdrama" class="category-filter-chip px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 glass-card hover:bg-white/15 border border-white/15 text-white whitespace-nowrap cursor-pointer">
+          <i data-lucide="heart" class="w-3.5 h-3.5 text-rose-400"></i> Kdrama
+          <span id="badge-count-Kdrama" class="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono text-rose-300">0</span>
+        </button>
+        <button onclick="filterCategoryView('Anime')" id="chip-Anime" class="category-filter-chip px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 glass-card hover:bg-white/15 border border-white/15 text-white whitespace-nowrap cursor-pointer">
+          <i data-lucide="zap" class="w-3.5 h-3.5 text-brand-cyan"></i> Anime
+          <span id="badge-count-Anime" class="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono text-brand-cyan">0</span>
+        </button>
+        <button onclick="filterCategoryView('Chinese Drama')" id="chip-ChineseDrama" class="category-filter-chip px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 glass-card hover:bg-white/15 border border-white/15 text-white whitespace-nowrap cursor-pointer">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i> Chinese Drama
+          <span id="badge-count-ChineseDrama" class="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono text-amber-300">0</span>
+        </button>
+        <button onclick="filterCategoryView('Movie')" id="chip-Movie" class="category-filter-chip px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 glass-card hover:bg-white/15 border border-white/15 text-white whitespace-nowrap cursor-pointer">
+          <i data-lucide="film" class="w-3.5 h-3.5 text-brand-purple"></i> Movies
+          <span id="badge-count-Movie" class="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono text-purple-300">0</span>
+        </button>
+      </div>
+      <div id="categoryActiveIndicator" class="hidden sm:inline-flex text-[11px] font-semibold text-brand-cyan bg-brand-cyan/10 border border-brand-cyan/20 px-2.5 py-0.5 rounded-full whitespace-nowrap">
+        All Categories Active
+      </div>
+    </div>
+  </nav>
+
+  <!-- ======================================================== -->
+  <!-- 1. MAIN HOMEPAGE VIEW (WRAPPER) -->
+  <!-- ======================================================== -->
+  <div id="homeView" class="transition-opacity duration-300 pt-[52px]">
+
+    <!-- HERO SECTION (DRIVEN BY FIRESTORE) -->
+    <section id="heroSection" class="relative min-h-[85vh] md:min-h-[92vh] flex items-end pb-20 md:pb-28 px-4 md:px-12 overflow-hidden">
+      <!-- Carousel Backdrop -->
+      <div id="heroBackdrops" class="absolute inset-0 -z-10 transition-opacity duration-1000">
+        <img id="heroImage" src="https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=2000&q=80" alt="Hero Banner" class="w-full h-full object-cover object-center filter brightness-[0.6] contrast-[1.12]" />
+        <div class="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/50 to-transparent"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/70 to-transparent"></div>
+      </div>
+
+      <!-- Hero Content -->
+      <div class="max-w-3xl z-10 space-y-4">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="px-2.5 py-1 rounded-full bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-extrabold tracking-wider uppercase flex items-center gap-1.5 shadow-neon-cyan">
+            <span class="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span> FEATURED TITLE
+          </span>
+          <span class="px-2.5 py-1 rounded-full bg-white/10 border border-white/10 text-slate-200 text-xs font-bold">
+            4K MASTER • DOLBY ATMOS
+          </span>
+        </div>
+
+        <h1 id="heroTitle" class="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-gradient leading-none">
+          SHOW VERSE
+        </h1>
+
+        <p id="heroDesc" class="text-sm md:text-base text-slate-300 max-w-xl line-clamp-3 leading-relaxed">
+          Streaming the latest high-bitrate episodes in Anime, Kdrama, Chinese Drama, and Feature Movies with ambient glow and Dolby audio.
+        </p>
+
+        <!-- Action Button (Play opens YouTube-Style Player Page) -->
+        <div class="pt-2 flex items-center gap-3.5 flex-wrap">
+          <button id="heroPlayBtn" class="px-7 py-3 rounded-xl bg-brand-cyan hover:bg-cyan-300 text-black font-extrabold text-sm flex items-center gap-2.5 shadow-neon-cyan hover:scale-105 transition-all cursor-pointer">
+            <i data-lucide="play" class="w-4 h-4 fill-black"></i> Play
+          </button>
+          <button onclick="toggleHeroMute()" id="heroMuteBtn" class="p-3 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur border border-white/15 text-white transition cursor-pointer" title="Toggle Cinematic Preview">
+            <i data-lucide="volume-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN BROWSING CONTENT ROWS (HORIZONTAL CATEGORY SLIDERS - 1 POSTER PER SHOW) -->
+    <main class="relative z-10 -mt-8 pb-28 px-4 md:px-12 space-y-10">
+
+      <!-- CONTINUE WATCHING SLIDER (LocalStorage Persisted) -->
+      <section id="section-ContinueWatching" class="transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-brand-cyan rounded-full shadow-neon-cyan"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Continue Watching</h2>
+            <span id="continueWatchingCount" class="text-xs text-slate-400 font-mono">0 In Progress</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('continueWatchingRow', -360)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('continueWatchingRow', 360)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="continueWatchingRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Rendered via localStorage logic -->
+        </div>
+      </section>
+
+      <!-- TRENDING NOW SLIDER ROW (REAL TRENDING LOGIC WITH VIEWS COUNTER & RANK NUMERALS) -->
+      <section id="section-Trending" class="transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-gradient-to-b from-brand-cyan to-indigo-500 rounded-full shadow-neon-cyan"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Trending Now</h2>
+            <span class="text-xs text-brand-cyan font-semibold px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/20" id="header-count-Trending">Top Ranked</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('trendingRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('trendingRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="trendingRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Dynamically rendered from Firestore grouped by series, sorted by highest views -->
+        </div>
+      </section>
+
+      <!-- 1. TRENDING KDRAMAS SLIDER ROW (1 POSTER PER SHOW) -->
+      <section id="section-Kdrama" class="category-row-section transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-rose-500 rounded-full shadow-[0_0_15px_rgba(244,63,94,0.5)]"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Trending Kdramas</h2>
+            <span class="text-xs text-rose-400 font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20" id="header-count-Kdrama">0 Series</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('kdramaRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-rose-400 transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('kdramaRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-rose-400 transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="kdramaRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Dynamically rendered from Firestore (1 poster per series) -->
+        </div>
+      </section>
+
+      <!-- 2. TOP ANIME SLIDER ROW (1 POSTER PER SHOW) -->
+      <section id="section-Anime" class="category-row-section transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-brand-cyan rounded-full shadow-neon-cyan"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Top Anime</h2>
+            <span class="text-xs text-brand-cyan font-semibold px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/20" id="header-count-Anime">0 Series</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('animeRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('animeRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="animeRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Dynamically rendered from Firestore (1 poster per series) -->
+        </div>
+      </section>
+
+      <!-- 3. CHINESE DRAMAS SLIDER ROW (1 POSTER PER SHOW) -->
+      <section id="section-ChineseDrama" class="category-row-section transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-amber-500 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)]"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Chinese Dramas</h2>
+            <span class="text-xs text-amber-400 font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20" id="header-count-ChineseDrama">0 Series</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('cdramaRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-amber-400 transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('cdramaRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-amber-400 transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="cdramaRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Dynamically rendered from Firestore (1 poster per series) -->
+        </div>
+      </section>
+
+      <!-- 4. MOVIES SLIDER ROW (1 POSTER PER SHOW) -->
+      <section id="section-Movie" class="category-row-section transition-all duration-300">
+        <div class="flex items-center justify-between mb-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-purple-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]"></div>
+            <h2 class="text-lg md:text-xl font-black tracking-wide text-white">Movies</h2>
+            <span class="text-xs text-purple-400 font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20" id="header-count-Movie">0 Series</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('moviesRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-purple-400 transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('moviesRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-purple-400 transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <div id="moviesRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Dynamically rendered from Firestore (1 poster per series) -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- 2. DEDICATED FULL-PAGE CATEGORY SLIDE VIEW -->
+  <!-- ======================================================== -->
+  <section id="dedicatedCategoryView" class="hidden min-h-screen pt-32 pb-28 px-4 md:px-12 max-w-7xl mx-auto space-y-8 transition-opacity duration-300">
+    <!-- Category Header Card -->
+    <div class="p-6 md:p-10 rounded-3xl bg-gradient-to-r from-white/[0.05] via-white/[0.02] to-transparent border border-white/10 relative overflow-hidden">
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <button onclick="filterCategoryView('All')" class="inline-flex items-center gap-2 text-xs font-bold text-brand-cyan hover:underline mb-3 cursor-pointer">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to All Categories
+          </button>
+          <div class="flex items-center gap-3.5">
+            <div id="categoryHeaderIcon" class="w-12 h-12 rounded-2xl bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan flex items-center justify-center shadow-neon-cyan">
+              <i data-lucide="zap" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <h1 id="categoryHeaderTitle" class="text-2xl sm:text-4xl font-black text-white tracking-tight">Anime Universe</h1>
+              <p id="categoryHeaderSubtitle" class="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">Streaming top-tier high bitrate series in Dolby Atmos with ambient glow.</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="categorySeriesCountBadge" class="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 text-xs font-black text-white">
+            0 Series
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Responsive Grid of Grouped Series (1 poster per series) -->
+    <div id="categoryShowsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+      <!-- Dynamically rendered -->
+    </div>
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- 3. YOUTUBE-STYLE SHOW DETAILS & PLAYER PAGE -->
+  <!-- ======================================================== -->
+  <section id="showPlayerPage" class="hidden min-h-screen pt-28 pb-28 px-4 md:px-12 max-w-6xl mx-auto space-y-8 transition-opacity duration-300">
+    <!-- Breadcrumb & Back Navigation -->
+    <div class="flex items-center justify-between">
+      <button onclick="closeShowPlayerPage()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition cursor-pointer">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Browse
+      </button>
+      <div class="text-xs text-slate-400 flex items-center gap-1.5">
+        <span class="cursor-pointer hover:text-brand-cyan" onclick="closeShowPlayerPage()">Home</span>
+        <span>/</span>
+        <span id="ytBreadcrumbCategory" class="text-slate-300">Anime</span>
+        <span>/</span>
+        <span id="ytBreadcrumbTitle" class="text-brand-cyan font-bold truncate max-w-[200px]">Title</span>
+      </div>
+    </div>
+
+    <!-- TOP: The Video Player (16:9 ratio, embedded at top of the screen) -->
+    <div class="space-y-4">
+      <div id="ytPlayerStage" onclick="handleYtPlayerTap(event)" class="relative w-full aspect-video rounded-2xl md:rounded-3xl overflow-hidden bg-black shadow-2xl border border-white/10 yt-player-glow group select-none cursor-pointer">
+        
+        <video id="ytVideo" class="w-full h-full object-contain" playsinline preload="metadata">
+          <track id="ytSubtitleTrack" kind="subtitles" srclang="en" label="English CC" default>
+        </video>
+
+        <!-- Center Tap Play Notice -->
+        <div id="ytCenterPlayNotice" class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300">
+          <div class="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md flex items-center justify-center border border-white/20 text-brand-cyan shadow-neon-cyan">
+            <i data-lucide="play" class="w-8 h-8 fill-brand-cyan ml-1"></i>
+          </div>
+        </div>
+
+        <!-- Double-Tap Skip Overlays (Within Player Frame) -->
+        <div id="ytSkipLeftIndicator" class="skip-indicator-overlay skip-left">
+          <div class="skip-indicator-pill">
+            <i data-lucide="rotate-ccw" class="w-5 h-5 text-brand-cyan"></i>
+            <span id="ytSkipLeftText">-10s</span>
+          </div>
+        </div>
+        <div id="ytSkipRightIndicator" class="skip-indicator-overlay skip-right">
+          <div class="skip-indicator-pill">
+            <i data-lucide="rotate-cw" class="w-5 h-5 text-brand-cyan"></i>
+            <span id="ytSkipRightText">+10s</span>
+          </div>
+        </div>
+
+        <!-- Video Player Overlay Controls -->
+        <div id="ytControlsOverlay" class="absolute inset-0 flex flex-col justify-between p-4 md:p-6 bg-gradient-to-t from-black/95 via-transparent to-black/80 opacity-100 transition-opacity duration-300">
+          
+          <!-- Top Bar inside embedded player -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span id="ytBadgeQuality" class="px-2.5 py-0.5 rounded-full bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-[10px] font-black uppercase">
+                1080P MASTER
+              </span>
+              <span id="ytBadgeAudio" class="px-2.5 py-0.5 rounded-full bg-white/10 text-slate-300 text-[10px] font-bold">
+                DOLBY ATMOS 5.1
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="toggleYtAmbient()" id="ytAmbientBtn" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-brand-cyan transition cursor-pointer" title="Toggle Ambient Glow">
+                <i data-lucide="sun" class="w-4 h-4"></i>
+              </button>
+              <button onclick="toggleYtFullscreen()" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer" title="Fullscreen Mode">
+                <i data-lucide="maximize" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom Bar inside embedded player -->
+          <div class="space-y-3">
+            <!-- Scrub / Progress Bar -->
+            <div class="flex items-center gap-3">
+              <span id="ytTimeDisplay" class="text-xs font-mono text-slate-300 w-24">00:00 / 00:00</span>
+              <div id="ytScrubContainer" onclick="seekYtVideo(event)" class="relative flex-1 h-3 flex items-center cursor-pointer group/bar">
+                <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden relative">
+                  <div id="ytBufferedBar" class="absolute top-0 left-0 bottom-0 bg-white/30 w-0 transition-all"></div>
+                  <div id="ytProgressBar" class="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-brand-cyan to-indigo-500 w-0 shadow-neon-cyan"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transport Controls -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 sm:gap-3">
+                <button onclick="toggleYtPlay()" class="p-2.5 rounded-xl bg-brand-cyan text-black hover:bg-cyan-300 shadow-neon-cyan transition cursor-pointer">
+                  <i data-lucide="play" id="ytPlayIcon" class="w-4 h-4 fill-black"></i>
+                </button>
+                <button onclick="skipYtTime(-10)" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer" title="Rewind 10s">
+                  <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                </button>
+                <button onclick="skipYtTime(10)" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer" title="Fast-forward 10s">
+                  <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                </button>
+                <div class="hidden sm:flex items-center gap-2 ml-2">
+                  <button onclick="toggleYtMute()" class="text-slate-300 hover:text-white cursor-pointer">
+                    <i data-lucide="volume-2" id="ytVolumeIcon" class="w-4 h-4"></i>
+                  </button>
+                  <input type="range" id="ytVolumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeYtVolume(this.value)" class="w-16 sm:w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer">
+                </div>
+              </div>
+
+              <!-- Right: Fullscreen / Theater expand -->
+              <div class="flex items-center gap-2">
+                <button onclick="toggleYtFullscreen()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-slate-200 flex items-center gap-1.5 transition cursor-pointer">
+                  <i data-lucide="expand" class="w-4 h-4 text-brand-cyan"></i>
+                  <span class="hidden sm:inline">Fullscreen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE: Show Title, Season Info & Horizontal Episodes Row -->
+    <div class="space-y-6">
+      <!-- Show Metadata -->
+      <div class="p-5 md:p-6 glass-card rounded-3xl border border-white/10 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="ytMetaCategory" class="px-2.5 py-0.5 rounded-full bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan text-xs font-black uppercase">
+                Anime
+              </span>
+              <span id="ytMetaSeason" class="px-2.5 py-0.5 rounded-full bg-white/10 text-slate-300 text-xs font-bold">
+                Season 1
+              </span>
+              <span id="ytMetaRating" class="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold flex items-center gap-1">
+                ★ 9.8
+              </span>
+            </div>
+            <h1 id="ytShowTitle" class="text-2xl md:text-3xl font-black text-white">
+              Series Title
+            </h1>
+            <p id="ytCurrentEpisodeTitle" class="text-sm font-semibold text-brand-cyan">
+              Episode 1
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <div id="ytShowViews" class="text-sm font-mono font-black text-amber-400 flex items-center gap-1 justify-end">
+                <i data-lucide="flame" class="w-4 h-4 text-amber-400"></i> 482,190 Views
+              </div>
+              <div class="text-[10px] text-slate-400">Real-Time Series Views</div>
+            </div>
+          </div>
+        </div>
+
+        <p id="ytShowDesc" class="text-xs md:text-sm text-slate-300 leading-relaxed max-w-4xl">
+          Show synopsis and episode description.
+        </p>
+      </div>
+
+      <!-- HORIZONTAL SCROLLABLE EPISODES ROW (SPECIFIC TO THIS GROUPED SHOW) -->
+      <div class="space-y-3.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-brand-cyan rounded-full shadow-neon-cyan"></div>
+            <h3 class="text-base md:text-lg font-black uppercase tracking-wider text-white">Episodes</h3>
+            <span id="ytEpisodeCountBadge" class="text-xs text-brand-cyan font-mono px-2.5 py-0.5 rounded-full bg-brand-cyan/10 border border-brand-cyan/20">
+              0 Episodes
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('ytEpisodesRow', -360)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('ytEpisodesRow', 360)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-brand-cyan transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Horizontal scrollable row showing ALL episodes specific to that grouped show -->
+        <div id="ytEpisodesRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Rendered dynamically for this show -->
+        </div>
+      </div>
+
+      <!-- BOTTOM: "Suggested for You" Horizontal Row -->
+      <div class="space-y-3.5 pt-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-2 h-6 bg-purple-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]"></div>
+            <h3 class="text-base md:text-lg font-black uppercase tracking-wider text-white">Suggested for You</h3>
+            <span class="text-xs text-purple-400 font-semibold">Other Top Series</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="scrollSlider('ytSuggestedRow', -450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-purple-400 transition cursor-pointer" title="Scroll Left">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <button onclick="scrollSlider('ytSuggestedRow', 450)" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-300 hover:text-purple-400 transition cursor-pointer" title="Scroll Right">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="ytSuggestedRow" class="category-slider-row flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth snap-x">
+          <!-- Rendered dynamically with other grouped series -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- FULLSCREEN AMBIENT VIDEO PLAYER MODAL -->
+  <!-- ======================================================== -->
+  <div id="playerModal" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col justify-between select-none">
+    
+    <!-- Quiet Small Semi-Transparent Unlock Button on the side/corner (Hidden center overlay replaced) -->
+    <button id="smallUnlockBtn" onclick="unlockScreen(event)" class="hidden absolute top-6 left-6 z-50 px-3.5 py-2 rounded-full bg-black/65 hover:bg-black/90 backdrop-blur-md border border-brand-cyan/40 text-brand-cyan shadow-neon-cyan flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none cursor-pointer" title="Unlock Controls" aria-label="Unlock Controls">
+      <i data-lucide="lock" class="w-4 h-4"></i>
+      <span class="text-xs font-bold text-white tracking-wide">Unlock</span>
+    </button>
+
+    <!-- Top Bar Controls -->
+    <div id="playerTopBar" class="relative z-40 p-4 md:p-6 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent">
+      <div class="flex items-center gap-4">
+        <button onclick="closePlayer()" class="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white backdrop-blur transition">
+          <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </button>
+        <div>
+          <h2 id="playerTitle" class="text-sm md:text-lg font-bold text-white tracking-wide truncate max-w-md">Playing Media</h2>
+          <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+            <span class="text-emerald-400 font-semibold flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Ultra-Low Latency
+            </span>
+            <span>•</span>
+            <span id="playerResBadge" class="bg-brand-cyan/20 text-brand-cyan px-2 py-0.5 rounded text-[10px] font-bold">4K HDR</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Right Controls -->
+      <div class="flex items-center gap-2 md:gap-3">
+        <button onclick="toggleAmbientLighting()" id="ambientToggleBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-brand-cyan/30 text-brand-cyan text-xs font-semibold backdrop-blur transition">
+          <i data-lucide="sun" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Ambient Glow: ON</span>
+        </button>
+        <button onclick="toggleLockScreen()" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 transition" title="Lock Screen">
+          <i data-lucide="lock" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Video Stage with Ambient Lighting -->
+    <div id="playerStageContainer" onclick="handlePlayerScreenTap(event)" class="relative flex-1 flex items-center justify-center overflow-hidden px-2 md:px-8 cursor-pointer">
+      <div id="playerStage" class="relative w-full max-w-6xl aspect-video rounded-3xl overflow-hidden ambient-glow-box bg-black shadow-2xl">
+        
+        <video id="mainVideo" class="w-full h-full object-contain" playsinline preload="metadata">
+          <track id="mainSubtitleTrack" kind="subtitles" srclang="en" label="English CC" default>
+        </video>
+
+        <!-- Center Tap Play Notice -->
+        <div id="centerPlayNotice" class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300">
+          <div class="w-20 h-20 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-brand-cyan">
+            <i data-lucide="play" class="w-10 h-10 fill-brand-cyan"></i>
+          </div>
+        </div>
+
+        <!-- Double-Tap Skip Overlays (Within Player Frame) -->
+        <div id="playerSkipLeftIndicator" class="skip-indicator-overlay skip-left">
+          <div class="skip-indicator-pill">
+            <i data-lucide="rotate-ccw" class="w-6 h-6 text-brand-cyan"></i>
+            <span id="playerSkipLeftText">-10s</span>
+          </div>
+        </div>
+        <div id="playerSkipRightIndicator" class="skip-indicator-overlay skip-right">
+          <div class="skip-indicator-pill">
+            <i data-lucide="rotate-cw" class="w-6 h-6 text-brand-cyan"></i>
+            <span id="playerSkipRightText">+10s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Player Control Center -->
+    <div id="playerBottomBar" class="relative z-40 p-4 md:p-6 bg-gradient-to-t from-black/95 via-black/80 to-transparent space-y-3">
+      
+      <!-- Progress Bar & Scrubbing -->
+      <div class="flex items-center gap-3">
+        <span id="timeDisplay" class="text-xs font-mono text-slate-300 w-24">00:00 / 00:00</span>
+        <div id="scrubContainer" onclick="seekVideo(event)" class="relative flex-1 h-3 flex items-center cursor-pointer group">
+          <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden relative">
+            <div id="bufferedBar" class="absolute top-0 left-0 bottom-0 bg-white/30 w-0 transition-all"></div>
+            <div id="progressBar" class="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-brand-cyan to-brand-purple w-0 shadow-neon-cyan"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transport Buttons -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 md:gap-4">
+          <!-- Play / Pause -->
+          <button onclick="togglePlay()" class="p-3 rounded-2xl bg-brand-cyan text-black hover:bg-cyan-300 shadow-neon-cyan transition">
+            <i data-lucide="play" id="playIcon" class="w-5 h-5 fill-black"></i>
+          </button>
+          
+          <!-- Skip 10s Backward -->
+          <button onclick="skipTime(-10)" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition" title="Rewind 10s">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          </button>
+
+          <!-- Skip 10s Forward -->
+          <button onclick="skipTime(10)" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition" title="Fast-forward 10s">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          </button>
+
+          <!-- Volume Controls -->
+          <div class="hidden sm:flex items-center gap-2 ml-2">
+            <button onclick="toggleMute()" class="text-slate-300 hover:text-white">
+              <i data-lucide="volume-2" id="volumeIcon" class="w-4 h-4"></i>
+            </button>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume(this.value)" class="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Right Side Settings Buttons -->
+        <div class="flex items-center gap-2 md:gap-3">
+          <!-- Audio & Subtitles Selector -->
+          <button onclick="toggleAudioSubModal()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-slate-200 flex items-center gap-1.5 transition">
+            <i data-lucide="subtitles" class="w-4 h-4 text-brand-cyan"></i>
+            <span class="hidden md:inline">Audio & CC</span>
+          </button>
+
+          <!-- Quality Switcher -->
+          <button onclick="toggleQualityModal()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-brand-cyan font-bold flex items-center gap-1.5 transition">
+            <i data-lucide="sliders" class="w-4 h-4"></i>
+            <span id="currentQualityBadge">4K Master</span>
+          </button>
+
+          <!-- PiP -->
+          <button onclick="togglePiP()" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 transition" title="Picture in Picture">
+            <i data-lucide="picture-in-picture" class="w-4 h-4"></i>
+          </button>
+
+          <!-- Fullscreen -->
+          <button id="fullscreenBtn" onclick="toggleFullscreen()" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 transition" title="Fullscreen">
+            <i data-lucide="maximize" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIO & SUBTITLE SELECTION MODAL (Inside playerModal for Fullscreen support) -->
+    <div id="audioSubModal" class="hidden absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="w-full max-w-md glass-card rounded-3xl p-6 border border-white/10 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+          <h3 class="text-sm font-black text-white flex items-center gap-2">
+            <i data-lucide="subtitles" class="w-4 h-4 text-brand-cyan"></i> Subtitles & Audio Stream
+          </h3>
+          <button onclick="toggleAudioSubModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <!-- Subtitle Track Options -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-2">Subtitles (Multi-Language CC)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="setSubtitle('English CC')" class="py-2 px-3 rounded-xl bg-brand-cyan/20 border border-brand-cyan text-brand-cyan text-xs font-bold text-left">English CC (Active)</button>
+            <button onclick="setSubtitle('Japanese')" class="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs text-left">Japanese (Original)</button>
+            <button onclick="setSubtitle('Korean')" class="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs text-left">Korean</button>
+            <button onclick="setSubtitle('Hindi')" class="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs text-left">Hindi</button>
+          </div>
+        </div>
+
+        <!-- Audio Track Options -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-2">Audio Master Track</label>
+          <div class="grid grid-cols-1 gap-2">
+            <button onclick="setAudioTrack('Original Japanese (Dolby Atmos 5.1)')" class="py-2.5 px-3 rounded-xl bg-brand-purple/20 border border-brand-purple text-purple-300 text-xs font-bold text-left flex justify-between">
+              <span>Original (Dolby Atmos 5.1)</span> <span class="text-[10px] bg-purple-500/40 px-1.5 rounded">STUDIO</span>
+            </button>
+            <button onclick="setAudioTrack('English Studio Dub')" class="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs text-left">English Studio Dub</button>
+            <button onclick="setAudioTrack('Korean Original 5.1')" class="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs text-left">Korean Original</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUALITY SELECTOR MODAL (Inside playerModal for Fullscreen support) -->
+    <div id="qualityModal" class="hidden absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="w-full max-w-sm glass-card rounded-3xl p-6 border border-white/10 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+          <h3 class="text-sm font-black text-white flex items-center gap-2">
+            <i data-lucide="sliders" class="w-4 h-4 text-brand-cyan"></i> Video Resolution
+          </h3>
+          <button onclick="toggleQualityModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <div class="space-y-2">
+          <button onclick="selectQuality('4K Master HDR (Bitrate: 32 Mbps)')" class="w-full py-2.5 px-3 rounded-xl bg-brand-cyan/20 border border-brand-cyan text-brand-cyan text-xs font-bold flex justify-between items-center">
+            <span>4K Ultra HD (HEVC 60FPS)</span>
+            <span class="text-[10px] bg-brand-cyan text-black px-1.5 py-0.5 rounded font-black">HDR</span>
+          </button>
+          <button onclick="selectQuality('1080p FHD (Bitrate: 8 Mbps)')" class="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-medium flex justify-between items-center">
+            <span>1080p Full HD</span>
+            <span class="text-[10px] text-slate-400">Crisp</span>
+          </button>
+          <button onclick="selectQuality('720p HD Data Saver')" class="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-medium flex justify-between items-center">
+            <span>720p HD</span>
+            <span class="text-[10px] text-slate-400">Data Saver</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- "ME" (PROFILE & EXCLUSIVE ADMIN ACCESS) MODAL -->
+  <!-- ======================================================== -->
+  <div id="meModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-2xl flex items-center justify-center p-4">
+    <div class="w-full max-w-lg glass-card rounded-3xl p-6 border border-white/15 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+      <!-- Header with Profile Info -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-cyan to-brand-purple flex items-center justify-center p-0.5 shadow-neon-cyan">
+            <div class="w-full h-full bg-brand-dark rounded-[14px] flex items-center justify-center font-black text-brand-cyan text-lg" id="meAvatarInitials">
+              V
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-black text-white" id="meDisplayName">Vimlesh Kumar</h3>
+              <span id="meRoleBadge" class="text-[9px] font-black px-2 py-0.5 rounded-full bg-brand-cyan text-black uppercase tracking-wider">
+                SECRET ADMIN
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 truncate max-w-[260px]" id="meEmailDisplay">vimleshkumar901559@gmail.com</p>
+          </div>
+        </div>
+        <button onclick="closeMeModal()" class="p-2 text-slate-400 hover:text-white rounded-xl bg-white/5">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- 2. EXCLUSIVE SECRET ADMIN ACCESS BUTTON CONTAINER -->
+      <!-- Rendered ONLY when verified admin: vimleshkumar901559@gmail.com -->
+      <div id="meSecretAdminSection">
+        <!-- Rendered strictly via enforceSecretAdminRule() in JS -->
+      </div>
+
+      <!-- 3. WATCH HISTORY SECTION (Recently clicked/watched videos) -->
+      <div class="space-y-3 border-t border-white/10 pt-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-brand-cyan"></i>
+            <h4 class="text-xs font-black uppercase tracking-wider text-white">Watch History</h4>
+          </div>
+          <button onclick="clearWatchHistory()" class="text-[11px] text-slate-400 hover:text-rose-400 transition cursor-pointer" id="clearWatchHistoryBtn">Clear History</button>
+        </div>
+        <div id="meWatchHistoryList" class="space-y-2 max-h-56 overflow-y-auto pr-1 no-scrollbar">
+          <!-- Populated dynamically by renderWatchHistory() -->
+        </div>
+      </div>
+
+      <!-- 4. ACCOUNT AUTHENTICATION (SIGN OUT BUTTON) -->
+      <div id="meAuthActions" class="space-y-3 border-t border-white/10 pt-4">
+        <!-- Handled dynamically by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- SMART DOWNLOADS HUB MODAL -->
+  <!-- ======================================================== -->
+  <div id="downloadsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+    <div class="w-full max-w-xl glass-card rounded-3xl p-6 border border-white/15 shadow-2xl space-y-6">
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2.5 bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan rounded-2xl">
+            <i data-lucide="hard-drive" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-white">Smart Downloads & Offline Hub</h3>
+            <p class="text-xs text-slate-400">Play local media or download high-bitrate streams for offline</p>
+          </div>
+        </div>
+        <button onclick="closeDownloadsModal()" class="text-slate-400 hover:text-white p-2">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Storage Breakdown -->
+      <div class="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-2">
+        <div class="flex justify-between text-xs">
+          <span class="text-slate-300 font-semibold">Device Storage Allocation</span>
+          <span class="text-brand-cyan font-mono font-bold">128.4 GB Free of 256 GB</span>
+        </div>
+        <div class="w-full h-2.5 bg-white/10 rounded-full overflow-hidden flex">
+          <div class="bg-brand-cyan h-full w-[25%] shadow-neon-cyan"></div>
+          <div class="bg-brand-purple h-full w-[12%]"></div>
+          <div class="bg-white/20 h-full w-[15%]"></div>
+        </div>
+      </div>
+
+      <!-- Offline Downloads Info -->
+      <div class="space-y-3">
+        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Queue & Saved Files</h4>
+        <div class="p-6 text-center text-xs text-slate-400 bg-white/5 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-2">
+          <i data-lucide="download-cloud" class="w-6 h-6 text-slate-500"></i>
+          <p class="font-bold text-slate-300">No Offline Files Downloaded Yet</p>
+          <p class="text-[11px] text-slate-500">You can scan your local device below to play offline videos with the ambient player.</p>
+        </div>
+      </div>
+
+      <!-- Local File Scanner -->
+      <div class="border-t border-white/10 pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h4 class="text-xs font-bold text-white">Local Device File Scanner</h4>
+            <p class="text-[11px] text-slate-400">Detect and play local .mp4 / .mkv files in ambient mode</p>
+          </div>
+          <button onclick="simulateLocalScan()" id="scanBtn" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-brand-cyan/40 text-brand-cyan rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="radar" class="w-4 h-4"></i> Scan Storage
+          </button>
+        </div>
+        <div id="localScanResults" class="hidden space-y-2 max-h-36 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- SEARCH MODAL (SEARCHES FIRESTORE EPISODES DIRECTLY) -->
+  <!-- ======================================================== -->
+  <div id="searchModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-2xl flex items-start justify-center pt-16 px-4">
+    <div class="w-full max-w-2xl glass-card rounded-3xl p-6 border border-white/15 shadow-2xl space-y-5">
+      <div class="relative flex items-center">
+        <i data-lucide="search" class="absolute left-4 w-5 h-5 text-brand-cyan"></i>
+        <input type="text" id="searchInput" oninput="handleSearchQuery(this.value)" placeholder="Search Kdrama, Anime, Chinese Drama, or Movies..." class="w-full bg-white/5 border border-white/15 rounded-2xl py-3.5 pl-12 pr-12 text-sm text-white focus:outline-none focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan">
+        <button onclick="closeSearchModal()" class="absolute right-4 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Quick Search Categories -->
+      <div>
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Explore by category:</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="setSearchTerm('Kdrama')" class="px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs font-semibold hover:bg-rose-500 hover:text-white transition">#Kdrama</button>
+          <button onclick="setSearchTerm('Anime')" class="px-3 py-1 rounded-full bg-brand-cyan/10 border border-brand-cyan/40 text-brand-cyan text-xs font-semibold hover:bg-brand-cyan hover:text-black transition">#Anime</button>
+          <button onclick="setSearchTerm('Chinese Drama')" class="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500 hover:text-black transition">#ChineseDrama</button>
+          <button onclick="setSearchTerm('Movie')" class="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/40 text-purple-300 text-xs font-semibold hover:bg-purple-500 hover:text-white transition">#Movie</button>
+        </div>
+      </div>
+
+      <!-- Live Search Results (Populated from Firestore) -->
+      <div id="searchResults" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- CREATOR STUDIO ADMIN DASHBOARD MODAL -->
+  <!-- Strictly for: vimleshkumar901559@gmail.com -->
+  <!-- ======================================================== -->
+  <div id="creatorStudioModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl glass-card rounded-3xl p-6 md:p-8 border border-brand-cyan/40 shadow-neon-cyan space-y-6 max-h-[92vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-2xl bg-brand-cyan/20 border border-brand-cyan text-brand-cyan flex items-center justify-center shadow-neon-cyan">
+            <i data-lucide="clapperboard" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-black text-white">Creator Studio (Admin Control)</h3>
+              <span class="text-[10px] bg-brand-cyan text-black font-extrabold px-2 py-0.5 rounded-full">FIRESTORE DIRECT</span>
+            </div>
+            <p class="text-xs text-slate-400">Logged in as: <span class="text-brand-cyan font-mono">vimleshkumar901559@gmail.com</span></p>
+          </div>
+        </div>
+        <button onclick="closeCreatorStudio()" class="p-2 rounded-xl bg-white/5 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- DYNAMIC ADMIN FORM (Requirement 4) -->
+      <form id="adminUploadForm" onsubmit="handleBatchUpload(event)" class="space-y-4 bg-white/5 p-5 rounded-2xl border border-white/10">
+        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+          <i data-lucide="upload-cloud" class="w-4 h-4 text-brand-cyan"></i> Batch-Upload Episode or Movie to Firestore
+        </h4>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Series / Title Name *</label>
+            <input type="text" id="adminTitle" required placeholder="e.g., Solo Leveling: Arise" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Category (Strict Mapping) *</label>
+            <select id="admin-category" onchange="handleCategoryChange()" required class="w-full bg-slate-900 border border-brand-cyan/40 rounded-xl px-3 py-2 text-xs text-brand-cyan font-bold focus:border-brand-cyan focus:outline-none">
+              <option value="Kdrama">Kdrama</option>
+              <option value="Anime" selected>Anime</option>
+              <option value="Chinese Drama">Chinese Drama</option>
+              <option value="Movie">Movie</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- DYNAMIC SEASON & EPISODE FIELDS (Visually hidden if Category == 'Movie') -->
+        <div class="grid grid-cols-2 gap-4" id="adminSeasonEpisodeRow">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Season</label>
+            <input type="number" id="adminSeason" value="1" min="1" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Episode #</label>
+            <input type="number" id="adminEpisode" value="1" min="1" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Master Video Stream URL (.mp4 / .m3u8 HLS) *</label>
+            <input type="url" id="adminVideoUrl" required placeholder="https://vjs.zencdn.net/v/oceans.mp4" value="https://vjs.zencdn.net/v/oceans.mp4" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Thumbnail / Poster Image URL</label>
+            <input type="url" id="adminThumbUrl" placeholder="https://images.unsplash.com/photo-..." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Audio Tracks (Comma separated)</label>
+            <input type="text" id="adminAudioTracks" value="Dolby Atmos 5.1, Studio Master" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Subtitles (Comma separated)</label>
+            <input type="text" id="adminSubtitles" value="English CC, Spanish, Japanese, Hindi" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Synopsis</label>
+          <textarea id="adminSynopsis" rows="2" placeholder="Brief synopsis of this title..." class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-brand-cyan focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div class="flex items-center gap-2 text-xs text-emerald-400">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+            <span>Verified Admin: vimleshkumar901559@gmail.com</span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <button type="button" onclick="addToBatchQueue()" class="px-4 py-2.5 rounded-xl border border-brand-cyan/60 hover:bg-brand-cyan/10 text-brand-cyan font-bold text-xs transition flex items-center gap-2">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i> + Add to Batch Queue
+            </button>
+            <button type="button" onclick="uploadAllBatchToFirestore()" id="btnUploadAllBatch" class="px-6 py-2.5 bg-brand-cyan text-black font-extrabold text-xs rounded-xl shadow-neon-cyan hover:bg-cyan-300 transition flex items-center gap-2">
+              <i data-lucide="rocket" class="w-4 h-4"></i> <span>🚀 Upload ALL to Firestore</span>
+              <span id="batchCountBadge" class="bg-black/80 text-brand-cyan text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <!-- STAGED BATCH QUEUE -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-brand-cyan"></i>
+            <h4 class="text-xs font-black uppercase tracking-wider text-slate-200">STAGED BATCH QUEUE</h4>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="batchQueueCounter" class="text-xs text-brand-cyan font-mono font-bold">0 Items</span>
+            <button onclick="clearBatchQueue()" class="text-[11px] text-slate-400 hover:text-rose-400 transition">Clear Queue</button>
+          </div>
+        </div>
+        <div id="stagedBatchQueueList" class="space-y-2 max-h-52 overflow-y-auto">
+          <!-- Rendered via admin.js -->
+        </div>
+      </div>
+
+      <!-- PUBLISHED CONTENT HISTORY (Real-time Firestore Management) -->
+      <div class="space-y-3 border-t border-white/10 pt-5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i>
+            <h4 class="text-xs font-black uppercase tracking-wider text-white">PUBLISHED CONTENT HISTORY (<code class="text-brand-cyan font-mono text-[11px]">showverse_episodes</code>)</h4>
+          </div>
+          <span id="publishedContentCounter" class="text-xs text-emerald-400 font-mono font-bold">Live Synced</span>
+        </div>
+        <div id="publishedContentList" class="space-y-2 max-h-64 overflow-y-auto">
+          <!-- Rendered dynamically by admin.js from Firestore -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MOBILE BOTTOM APP DOCK (Verse Pass removed, replaced by "Me" Profile tab) -->
+  <div class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-brand-dark/95 backdrop-blur-xl border-t border-white/10 px-6 py-2.5 flex items-center justify-between">
+    <button onclick="filterCategoryView('All')" class="flex flex-col items-center gap-1 text-brand-cyan text-[10px] font-semibold">
+      <i data-lucide="compass" class="w-5 h-5"></i>
+      <span>Explore</span>
+    </button>
+    <button onclick="openSearchModal()" class="flex flex-col items-center gap-1 text-slate-400 hover:text-white text-[10px] font-semibold">
+      <i data-lucide="search" class="w-5 h-5"></i>
+      <span>Search</span>
+    </button>
+    <button onclick="openDownloadsModal()" class="flex flex-col items-center gap-1 text-slate-400 hover:text-white text-[10px] font-semibold">
+      <i data-lucide="folder-down" class="w-5 h-5"></i>
+      <span>Offline</span>
+    </button>
+    <button onclick="openMeModal()" id="bottomNavMe" class="flex flex-col items-center gap-1 text-slate-400 hover:text-brand-cyan text-[10px] font-semibold">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span>Me</span>
+    </button>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-20 md:bottom-8 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300">
+    <div class="glass-card px-4 py-3 rounded-2xl border border-brand-cyan/40 shadow-neon-cyan flex items-center gap-3">
+      <i data-lucide="sparkles" class="w-4 h-4 text-brand-cyan"></i>
+      <span id="toastMsg" class="text-xs font-bold text-white">Action Completed</span>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script type="module" src="/firebase.js"></script>
+  <script type="module" src="/admin.js"></script>
+  <script type="module" src="/player.js"></script>
+  <script type="module" src="/app.js"></script>
+
+  <script type="module">
+    import { auth } from "./firebase.js";
+    import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    // TARGET ADMIN EMAIL AS MANDATED
+    const SECRET_ADMIN_EMAIL = 'vimleshkumar901559@gmail.com';
+
+    // Application User State
+    let currentUser = {
+      email: SECRET_ADMIN_EMAIL,
+      displayName: 'Vimlesh Kumar',
+      uid: 'showverse_admin_01'
+    };
+
+    // Current playing media metadata for Continue Watching tracking
+    let currentPlayingMedia = null;
+
+    // ========================================================
+    // CONTINUE WATCHING (LOCALSTORAGE PERSISTENCE & RESUME)
+    // ========================================================
+    const CW_STORAGE_KEY = 'showverse_continue_watching';
+
+    export function getContinueWatchingList() {
+      try {
+        const raw = localStorage.getItem(CW_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    export function saveContinueWatchingProgress(current, duration) {
+      if (!currentPlayingMedia || !currentPlayingMedia.title) return;
+      if (!Number.isFinite(current) || current < 1) return;
+      const dur = Number.isFinite(duration) && duration > 0 ? duration : (Number(currentPlayingMedia.duration) || 0);
+      const progressPct = dur > 0 ? Math.min(100, Math.round((current / dur) * 100)) : 0;
+
+      const mediaTitle = String(currentPlayingMedia.title);
+      let list = getContinueWatchingList();
+      // Remove any prior entry with matching title
+      list = list.filter(item => String(item.title) !== mediaTitle);
+
+      // If user watched < 95%, keep in Continue Watching list
+      if (progressPct < 95) {
+        list.unshift({
+          id: String(currentPlayingMedia.id || 'cw_' + Date.now()),
+          title: mediaTitle,
+          videoUrl: String(currentPlayingMedia.videoUrl || ''),
+          image: typeof currentPlayingMedia.image === 'string' && currentPlayingMedia.image ? currentPlayingMedia.image : 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+          category: typeof currentPlayingMedia.category === 'string' && currentPlayingMedia.category ? currentPlayingMedia.category : 'Anime',
+          currentTime: Math.floor(current),
+          duration: Math.floor(dur),
+          progressPct: progressPct,
+          savedAt: Date.now()
+        });
+      }
+
+      // Keep watch history synced with latest timestamp
+      if (typeof recordWatchHistory === 'function') {
+        recordWatchHistory({
+          id: currentPlayingMedia.id,
+          title: mediaTitle,
+          videoUrl: currentPlayingMedia.videoUrl,
+          image: currentPlayingMedia.image,
+          category: currentPlayingMedia.category,
+          currentTime: Math.floor(current)
+        });
+      }
+
+      try {
+        localStorage.setItem(CW_STORAGE_KEY, JSON.stringify(list.slice(0, 12)));
+      } catch (e) {
+        console.warn("localStorage write notice:", e ? (e.message || String(e)) : "Storage notice");
+      }
+
+      renderContinueWatching();
+    }
+
+    export function renderContinueWatching() {
+      const container = document.getElementById('continueWatchingRow');
+      const counter = document.getElementById('continueWatchingCount');
+      if (!container) return;
+
+      const items = getContinueWatchingList();
+      if (counter) {
+        counter.innerText = `${items.length} In Progress`;
+      }
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="flex-shrink-0 w-80 p-6 text-center glass-card rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-2">
+            <i data-lucide="play-circle" class="w-7 h-7 text-slate-500"></i>
+            <p class="font-bold text-xs text-slate-300">No In-Progress Videos</p>
+            <p class="text-[11px] text-slate-400">Play any title to resume playback right here automatically.</p>
+          </div>
+        `;
+      } else {
+        container.innerHTML = items.map((m) => {
+          const safeTitle = (m.title || 'Untitled').replace(/'/g, "\\'");
+          const safeUrl = (m.videoUrl || '').replace(/'/g, "\\'");
+          const safeImage = (m.image || '').replace(/'/g, "\\'");
+          const safeCat = (m.category || 'Anime').replace(/'/g, "\\'");
+          const catColor = m.category === 'Kdrama' ? 'bg-rose-500 text-white' :
+            m.category === 'Anime' ? 'bg-brand-cyan text-black' :
+            m.category === 'Chinese Drama' ? 'bg-amber-400 text-black' : 'bg-purple-500 text-white';
+
+          return `
+            <div class="flex-shrink-0 w-64 sm:w-72 snap-start glass-card rounded-2xl overflow-hidden group border border-white/10 hover:border-brand-cyan/50 transition duration-300">
+              <div class="relative aspect-video overflow-hidden bg-slate-900 cursor-pointer" onclick="resumeMedia('${safeTitle}', '${safeUrl}', ${m.currentTime}, '${safeImage}', '${safeCat}')">
+                <img src="${m.image}" alt="${m.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                
+                <!-- Category Badge -->
+                <div class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded text-[10px] font-black uppercase ${catColor}">
+                  ${m.category}
+                </div>
+
+                <!-- Play Overlay Button -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <div class="w-11 h-11 rounded-full bg-brand-cyan text-black flex items-center justify-center shadow-neon-cyan transform scale-90 group-hover:scale-100 transition">
+                    <i data-lucide="play" class="w-4 h-4 fill-black ml-0.5"></i>
+                  </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
+                  <div class="h-full bg-gradient-to-r from-brand-cyan to-brand-purple" style="width: ${m.progressPct}%"></div>
+                </div>
+              </div>
+
+              <div class="p-3 flex items-center justify-between">
+                <div class="min-w-0 flex-1 mr-2">
+                  <h3 class="font-bold text-xs text-white truncate hover:text-brand-cyan cursor-pointer transition" onclick="resumeMedia('${safeTitle}', '${safeUrl}', ${m.currentTime}, '${safeImage}', '${safeCat}')">
+                    ${m.title}
+                  </h3>
+                  <p class="text-[10px] text-slate-400 mt-0.5 flex items-center justify-between">
+                    <span class="text-brand-cyan font-mono font-semibold">Resume at ${formatTime(m.currentTime)}</span>
+                    <span class="text-slate-400 font-mono">${m.progressPct}%</span>
+                  </p>
+                </div>
+                <button onclick="removeFromContinueWatching('${safeTitle}')" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer" title="Dismiss">
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    window.resumeMedia = (title, url, time, image, category) => {
+      if (typeof window.openShowPlayerPage === 'function') {
+        window.openShowPlayerPage(title, 0, time);
+      } else {
+        playMedia(title, url, time, { image, category });
+      }
+    };
+
+    window.removeFromContinueWatching = (title) => {
+      const targetTitle = String(title);
+      let list = getContinueWatchingList();
+      list = list.filter(m => String(m.title) !== targetTitle);
+      try {
+        localStorage.setItem(CW_STORAGE_KEY, JSON.stringify(list));
+      } catch (e) {}
+      renderContinueWatching();
+      showToast(`Removed from Continue Watching`);
+    };
+
+    // ========================================================
+    // WATCH HISTORY ENGINE (EXCLUSIVELY FOR "ME" PROFILE SECTION)
+    // ========================================================
+    const WATCH_HISTORY_KEY = 'showverse_watch_history_records';
+
+    export function getWatchHistory() {
+      try {
+        const raw = localStorage.getItem(WATCH_HISTORY_KEY);
+        if (!raw) {
+          // Sync existing Continue Watching as starting history
+          const cw = getContinueWatchingList();
+          if (cw && cw.length > 0) {
+            return cw.map(c => ({
+              id: c.id,
+              title: c.title,
+              videoUrl: c.videoUrl,
+              image: c.image,
+              category: c.category,
+              currentTime: c.currentTime,
+              playedAt: c.savedAt || Date.now()
+            }));
+          }
+          return [];
+        }
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    export function recordWatchHistory(item) {
+      if (!item || !item.title) return;
+      let history = getWatchHistory();
+      const strTitle = String(item.title);
+      history = history.filter(h => String(h.title) !== strTitle);
+      history.unshift({
+        id: String(item.id || 'wh_' + Date.now()),
+        title: strTitle,
+        videoUrl: String(item.videoUrl || ''),
+        image: typeof item.image === 'string' && item.image ? item.image : 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+        category: typeof item.category === 'string' && item.category ? item.category : 'Anime',
+        currentTime: Number(item.currentTime) || 0,
+        playedAt: Date.now()
+      });
+      try {
+        localStorage.setItem(WATCH_HISTORY_KEY, JSON.stringify(history.slice(0, 25)));
+      } catch (e) {}
+      renderWatchHistory();
+    }
+
+    export function clearWatchHistory() {
+      localStorage.removeItem(WATCH_HISTORY_KEY);
+      renderWatchHistory();
+      showToast("Watch History Cleared");
+    }
+
+    export function removeFromWatchHistory(title, e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      let history = getWatchHistory();
+      history = history.filter(h => String(h.title) !== String(title));
+      try {
+        localStorage.setItem(WATCH_HISTORY_KEY, JSON.stringify(history));
+      } catch (e) {}
+      renderWatchHistory();
+      showToast("Removed from History");
+    }
+
+    export function renderWatchHistory() {
+      const container = document.getElementById('meWatchHistoryList');
+      if (!container) return;
+
+      const history = getWatchHistory();
+      if (history.length === 0) {
+        container.innerHTML = `
+          <div class="p-5 text-center bg-white/5 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center gap-1.5">
+            <i data-lucide="film" class="w-6 h-6 text-slate-500"></i>
+            <p class="text-xs font-bold text-slate-300">No Watch History Yet</p>
+            <p class="text-[11px] text-slate-400">Recently clicked or watched videos will appear here.</p>
+          </div>
+        `;
+      } else {
+        container.innerHTML = history.map(item => {
+          const safeTitle = (item.title || 'Untitled').replace(/'/g, "\\'");
+          const safeUrl = (item.videoUrl || '').replace(/'/g, "\\'");
+          const safeImg = (item.image || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80').replace(/'/g, "\\'");
+          const safeCat = (item.category || 'Anime').replace(/'/g, "\\'");
+          const catColor = item.category === 'Kdrama' ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' :
+            item.category === 'Anime' ? 'text-brand-cyan bg-brand-cyan/10 border-brand-cyan/30' :
+            item.category === 'Chinese Drama' ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' :
+            'text-purple-400 bg-purple-500/10 border-purple-500/30';
+          const resumeLabel = item.currentTime > 2 ? `Resume at ${formatTime(item.currentTime)}` : 'Watched';
+
+          return `
+            <div class="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-brand-cyan/30 transition group cursor-pointer" onclick="if(window.openShowPlayerPage){ openShowPlayerPage('${safeTitle}', 0, ${item.currentTime || 0}); } else { playMedia('${safeTitle}', '${safeUrl}', ${item.currentTime || 0}, { id: '${item.id || ''}', image: '${safeImg}', category: '${safeCat}' }); } closeMeModal();">
+              <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                <div class="relative w-14 h-11 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
+                  <img src="${item.image || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80'}" alt="${item.title}" class="w-full h-full object-cover">
+                  <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                    <i data-lucide="play" class="w-3.5 h-3.5 text-brand-cyan fill-brand-cyan"></i>
+                  </div>
+                </div>
+                <div class="text-left overflow-hidden min-w-0">
+                  <h5 class="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-[240px] group-hover:text-brand-cyan transition">${item.title}</h5>
+                  <div class="flex items-center gap-2 text-[10px] mt-0.5">
+                    <span class="px-1.5 py-0.2 rounded border font-semibold ${catColor}">${item.category || 'Video'}</span>
+                    <span class="text-slate-400 font-mono text-[10px]">${resumeLabel}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 flex-shrink-0 pl-2">
+                <button onclick="removeFromWatchHistory('${safeTitle}', event)" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer" title="Remove from History">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    window.getWatchHistory = getWatchHistory;
+    window.recordWatchHistory = recordWatchHistory;
+    window.clearWatchHistory = clearWatchHistory;
+    window.removeFromWatchHistory = removeFromWatchHistory;
+    window.renderWatchHistory = renderWatchHistory;
+
+    // ========================================================
+    // STRICT SECRET ADMIN LOGIC (EXCLUSIVE ACCESS VIA "ME" SECTION)
+    // ========================================================
+    function enforceSecretAdminRule(user) {
+      const secretAdminSection = document.getElementById('meSecretAdminSection');
+      const meDisplayName = document.getElementById('meDisplayName');
+      const meEmailDisplay = document.getElementById('meEmailDisplay');
+      const meAvatarInitials = document.getElementById('meAvatarInitials');
+      const meRoleBadge = document.getElementById('meRoleBadge');
+      const meAuthActions = document.getElementById('meAuthActions');
+      const navAvatar = document.getElementById('navAvatar');
+      const navUsername = document.getElementById('navUsername');
+
+      const isSecretAdmin = (user && user.email === SECRET_ADMIN_EMAIL);
+
+      // Top Nav updates
+      if (navUsername) {
+        navUsername.innerText = user ? (user.displayName || user.email.split('@')[0]) : 'Sign In';
+      }
+      if (navAvatar) {
+        navAvatar.innerText = user ? (user.displayName || user.email)[0].toUpperCase() : '?';
+      }
+
+      // "Me" Modal Profile Header updates
+      if (meDisplayName) meDisplayName.innerText = user ? (user.displayName || 'Show Verse User') : 'Guest Viewer';
+      if (meEmailDisplay) meEmailDisplay.innerText = user ? user.email : 'Not signed in';
+      if (meAvatarInitials) meAvatarInitials.innerText = user ? (user.displayName || user.email)[0].toUpperCase() : 'G';
+
+      if (meRoleBadge) {
+        if (isSecretAdmin) {
+          meRoleBadge.innerText = 'SECRET ADMIN';
+          meRoleBadge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-brand-cyan text-black uppercase tracking-wider shadow-neon-cyan';
+        } else if (user) {
+          meRoleBadge.innerText = 'VIEWER';
+          meRoleBadge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-white/20 text-white uppercase tracking-wider';
+        } else {
+          meRoleBadge.innerText = 'GUEST';
+          meRoleBadge.className = 'text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 uppercase tracking-wider';
+        }
+      }
+
+      // EXCLUSIVE SECRET ADMIN BUTTON: Exists ONLY if user is verified admin!
+      if (secretAdminSection) {
+        if (isSecretAdmin) {
+          secretAdminSection.innerHTML = `
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-brand-cyan/15 via-brand-purple/15 to-transparent border border-brand-cyan/50 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="sparkle" class="w-4 h-4 text-brand-cyan animate-pulse"></i>
+                  <h4 class="font-black text-sm text-white">Creator Studio (Admin Control)</h4>
+                </div>
+                <span class="text-[9px] bg-brand-cyan text-black font-black px-2 py-0.5 rounded-full">VERIFIED ADMIN</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Welcome <span class="text-brand-cyan font-bold">Vimlesh Kumar</span>. Upload, batch-stage, and manage live published episodes in the <code class="text-brand-cyan font-mono">showverse_episodes</code> collection.
+              </p>
+              <button id="secret-creator-studio-btn" onclick="openCreatorStudio(); closeMeModal();" class="w-full py-2.5 px-4 rounded-xl bg-brand-cyan hover:bg-cyan-300 text-black font-black text-xs shadow-neon-cyan flex items-center justify-center gap-2 transition hover:scale-[1.01] mt-1">
+                <i data-lucide="upload-cloud" class="w-4 h-4 fill-black"></i> Open Creator Studio Dashboard
+              </button>
+            </div>
+          `;
+        } else {
+          // Strictly remove entirely from the DOM
+          secretAdminSection.innerHTML = '';
+        }
+      }
+
+      // Auth actions (Login / Logout)
+      if (meAuthActions) {
+        if (user) {
+          meAuthActions.innerHTML = `
+            <button onclick="handleSignOut()" class="w-full py-3 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition">
+              <i data-lucide="log-out" class="w-4 h-4"></i> Sign Out
+            </button>
+          `;
+        } else {
+          meAuthActions.innerHTML = `
+            <button onclick="triggerGoogleSignIn()" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-black font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg">
+              <svg class="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+              Sign In with Google
+            </button>
+          `;
+        }
+      }
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    // Subscribe to Firebase onAuthStateChanged
+    if (auth) {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          currentUser = user;
+        }
+        enforceSecretAdminRule(currentUser);
+      });
+    }
+
+    // ========================================================
+    // VIDEO PLAYER ENGINE WITH AMBIENT LIGHTING & RESUME SUPPORT
+    // ========================================================
+    const video = document.getElementById('mainVideo');
+    const FALLBACK_STREAM = 'https://vjs.zencdn.net/v/oceans.mp4';
+    let isAmbientOn = true;
+    let isLocked = false;
+    let activeHls = null;
+    let timeUpdateInterval = null;
+
+    if (video) {
+      video.addEventListener('error', () => {
+        const err = video.error;
+        console.warn("Video stream notice:", err ? (err.message || err.code) : "error");
+        if (video.src && !video.src.includes('oceans.mp4')) {
+          video.src = FALLBACK_STREAM;
+          video.load();
+          const p = video.play();
+          if (p !== undefined) p.catch(() => {});
+        }
+      });
+    }
+
+    window.playMedia = (title, url, resumeTime = 0, meta = {}) => {
+      let targetUrl = typeof url === 'string' ? url : '';
+      if (!targetUrl || targetUrl.includes('commondatastorage') || targetUrl.includes('w3.org') || targetUrl.includes('test-videos.co.uk')) {
+        targetUrl = FALLBACK_STREAM;
+      }
+
+      const strTitle = typeof title === 'string' ? title : 'Playing Media';
+      const safeMeta = (meta && typeof meta === 'object') ? meta : {};
+
+      currentPlayingMedia = {
+        id: String(safeMeta.id || 'media_' + Date.now()),
+        title: strTitle,
+        videoUrl: targetUrl,
+        image: typeof safeMeta.image === 'string' ? safeMeta.image : '',
+        category: typeof safeMeta.category === 'string' ? safeMeta.category : 'Anime',
+        duration: 0
+      };
+
+      // Immediately track in Watch History (for recently clicked/watched videos)
+      if (typeof recordWatchHistory === 'function') {
+        recordWatchHistory({
+          id: currentPlayingMedia.id,
+          title: currentPlayingMedia.title,
+          videoUrl: currentPlayingMedia.videoUrl,
+          image: currentPlayingMedia.image,
+          category: currentPlayingMedia.category,
+          currentTime: Number(resumeTime) || 0
+        });
+      }
+
+      const modal = document.getElementById('playerModal');
+      const titleEl = document.getElementById('playerTitle');
+      if (titleEl) titleEl.innerText = title;
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+
+      if (activeHls) {
+        activeHls.destroy();
+        activeHls = null;
+      }
+
+      // Check if user has an existing saved timestamp in localStorage if resumeTime is 0
+      let seekTo = Number(resumeTime) || 0;
+      if (seekTo <= 0) {
+        const cwList = getContinueWatchingList();
+        const saved = cwList.find(x => x.title === title);
+        if (saved && saved.currentTime > 2) {
+          seekTo = saved.currentTime;
+        }
+      }
+
+      // Setup HLS or standard MP4
+      if (targetUrl.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+        activeHls = new Hls();
+        activeHls.loadSource(targetUrl);
+        activeHls.attachMedia(video);
+      } else {
+        video.src = targetUrl;
+        video.load();
+      }
+
+      // Resume position logic
+      const applyResume = () => {
+        if (seekTo > 0 && Number.isFinite(seekTo) && video.duration && seekTo < video.duration) {
+          video.currentTime = seekTo;
+          showToast(`Resumed from ${formatTime(seekTo)}`);
+        }
+      };
+
+      video.addEventListener('loadedmetadata', applyResume, { once: true });
+
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          updatePlayIcon(true);
+          if (seekTo > 0 && video.currentTime < seekTo) {
+            video.currentTime = seekTo;
+          }
+        }).catch(err => {
+          console.log("Autoplay waiting for user interaction:", err);
+          updatePlayIcon(false);
+        });
+      }
+
+      initVideoListeners();
+    };
+
+    window.closePlayer = () => {
+      const modal = document.getElementById('playerModal');
+      if (video) {
+        // Save current progress before closing
+        saveContinueWatchingProgress(video.currentTime, video.duration);
+        video.pause();
+      }
+      if (activeHls) {
+        activeHls.destroy();
+        activeHls = null;
+      }
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+      if (window.unlockScreen) window.unlockScreen();
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    };
+
+    function initVideoListeners() {
+      let lastSavedSecond = 0;
+
+      video.ontimeupdate = () => {
+        if (!video) return;
+        const duration = video.duration;
+        const current = video.currentTime;
+        if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(current)) return;
+
+        const pct = Math.max(0, Math.min(100, (current / duration) * 100));
+        const progressBar = document.getElementById('progressBar');
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        const timeDisplay = document.getElementById('timeDisplay');
+        if (timeDisplay) timeDisplay.innerText = `${formatTime(current)} / ${formatTime(duration)}`;
+
+        // Save progress to localStorage every 3 seconds of playback
+        const curSec = Math.floor(current);
+        if (curSec - lastSavedSecond >= 3) {
+          lastSavedSecond = curSec;
+          saveContinueWatchingProgress(current, duration);
+        }
+
+        // Buffered
+        if (video.buffered && video.buffered.length > 0) {
+          const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+          if (Number.isFinite(bufferedEnd)) {
+            const bufPct = Math.max(0, Math.min(100, (bufferedEnd / duration) * 100));
+            const bufferedBar = document.getElementById('bufferedBar');
+            if (bufferedBar) bufferedBar.style.width = `${bufPct}%`;
+          }
+        }
+      };
+
+      video.onpause = () => {
+        if (video) saveContinueWatchingProgress(video.currentTime, video.duration);
+      };
+
+      video.onended = () => {
+        updatePlayIcon(false);
+        if (video) saveContinueWatchingProgress(video.currentTime, video.duration);
+        showToast("Episode finished!");
+      };
+    }
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    window.togglePlay = () => {
+      if (video.paused) {
+        video.play();
+        updatePlayIcon(true);
+      } else {
+        video.pause();
+        updatePlayIcon(false);
+      }
+    };
+
+    function updatePlayIcon(isPlaying) {
+      const icon = document.getElementById('playIcon');
+      if (icon) {
+        icon.setAttribute('data-lucide', isPlaying ? 'pause' : 'play');
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    window.skipTime = (seconds) => {
+      if (!video) return;
+      const duration = video.duration;
+      const current = video.currentTime;
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(current)) return;
+      const targetTime = Math.max(0, Math.min(duration, current + Number(seconds)));
+      video.currentTime = targetTime;
+      saveContinueWatchingProgress(targetTime, duration);
+      if (typeof window.triggerPlayerSkipAnimation === 'function') {
+        window.triggerPlayerSkipAnimation(seconds);
+      }
+    };
+
+    window.seekVideo = (e) => {
+      if (!video) return;
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      const container = document.getElementById('scrubContainer');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      if (!rect.width) return;
+      const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const targetTime = pos * duration;
+      video.currentTime = targetTime;
+      saveContinueWatchingProgress(targetTime, duration);
+    };
+
+    window.changeVolume = (val) => {
+      video.volume = val;
+      const icon = document.getElementById('volumeIcon');
+      if (icon) {
+        icon.setAttribute('data-lucide', val == 0 ? 'volume-x' : 'volume-2');
+        if (window.lucide) lucide.createIcons();
+      }
+    };
+
+    window.toggleMute = () => {
+      video.muted = !video.muted;
+      changeVolume(video.muted ? 0 : 1);
+      document.getElementById('volumeSlider').value = video.muted ? 0 : 1;
+    };
+
+    window.toggleAmbientLighting = () => {
+      const stage = document.getElementById('playerStage');
+      const btn = document.getElementById('ambientToggleBtn');
+      isAmbientOn = !isAmbientOn;
+      if (isAmbientOn) {
+        stage.classList.add('ambient-glow-box');
+        btn.innerHTML = `<i data-lucide="sun" class="w-4 h-4"></i> <span class="hidden sm:inline">Ambient Glow: ON</span>`;
+      } else {
+        stage.classList.remove('ambient-glow-box');
+        btn.innerHTML = `<i data-lucide="moon" class="w-4 h-4"></i> <span class="hidden sm:inline">Ambient Glow: OFF</span>`;
+      }
+      if (window.lucide) lucide.createIcons();
+      showToast(`Ambient Lighting: ${isAmbientOn ? 'ENABLED' : 'DISABLED'}`);
+    };
+
+    window.togglePiP = async () => {
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else {
+          await video.requestPictureInPicture();
+        }
+      } catch (err) {
+        showToast("PiP not supported on this browser");
+      }
+    };
+
+    // Video player controls are managed with full container fullscreen in player.js
+    // Delegations ensure seamless compatibility across all devices and orientations
+    if (!window.toggleFullscreen) {
+      window.toggleFullscreen = () => {
+        const modal = document.getElementById('playerModal');
+        if (!document.fullscreenElement) {
+          modal.requestFullscreen?.() || modal.webkitRequestFullscreen?.();
+        } else {
+          document.exitFullscreen?.();
+        }
+      };
+    }
+
+    // ========================================================
+    // "ME" (PROFILE & EXCLUSIVE ADMIN) MODAL CONTROLS
+    // ========================================================
+    window.openMeModal = () => {
+      document.getElementById('meModal').classList.remove('hidden');
+      enforceSecretAdminRule(currentUser);
+      if (typeof window.renderWatchHistory === 'function') {
+        window.renderWatchHistory();
+      }
+      if (window.lucide) lucide.createIcons();
+    };
+
+    window.closeMeModal = () => {
+      document.getElementById('meModal').classList.add('hidden');
+    };
+
+    window.simulateLogin = (email, name) => {
+      currentUser = { email, displayName: name, uid: 'user_' + Date.now() };
+      enforceSecretAdminRule(currentUser);
+      showToast(`Switched account to: ${name}`);
+    };
+
+    window.triggerGoogleSignIn = async () => {
+      if (auth) {
+        try {
+          const provider = new GoogleAuthProvider();
+          const result = await signInWithPopup(auth, provider);
+          currentUser = result.user;
+          enforceSecretAdminRule(currentUser);
+          showToast(`Welcome back, ${currentUser.displayName || currentUser.email}!`);
+        } catch (e) {
+          console.warn("Google popup auth notice:", e);
+          simulateLogin(SECRET_ADMIN_EMAIL, "Vimlesh Kumar");
+        }
+      } else {
+        simulateLogin(SECRET_ADMIN_EMAIL, "Vimlesh Kumar");
+      }
+    };
+
+    window.handleSignOut = async () => {
+      if (auth) {
+        try {
+          await signOut(auth);
+        } catch (e) {}
+      }
+      currentUser = null;
+      enforceSecretAdminRule(null);
+      showToast("Signed out. Secret Admin controls removed from DOM.");
+    };
+
+    // ========================================================
+    // CREATOR STUDIO (ADMIN DASHBOARD FOR VIMLESH KUMAR)
+    // ========================================================
+    window.openCreatorStudio = () => {
+      if (!currentUser || currentUser.email !== SECRET_ADMIN_EMAIL) {
+        showToast("Access Denied: Restricted to Secret Admin vimleshkumar901559@gmail.com");
+        return;
+      }
+      document.getElementById('creatorStudioModal').classList.remove('hidden');
+      if (typeof window.handleCategoryChange === 'function') window.handleCategoryChange();
+      if (typeof window.renderStagedBatchQueue === 'function') window.renderStagedBatchQueue();
+      if (typeof window.initPublishedContentManager === 'function') window.initPublishedContentManager();
+    };
+
+    window.closeCreatorStudio = () => {
+      document.getElementById('creatorStudioModal').classList.add('hidden');
+    };
+
+    // ========================================================
+    // DOWNLOADS MODAL & LOCAL SCANNER
+    // ========================================================
+    window.openDownloadsModal = () => {
+      document.getElementById('downloadsModal').classList.remove('hidden');
+    };
+
+    window.closeDownloadsModal = () => {
+      document.getElementById('downloadsModal').classList.add('hidden');
+    };
+
+    window.simulateLocalScan = () => {
+      const btn = document.getElementById('scanBtn');
+      const results = document.getElementById('localScanResults');
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Scanning Storage...`;
+      if (window.lucide) lucide.createIcons();
+
+      setTimeout(() => {
+        btn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Scan Complete`;
+        results.classList.remove('hidden');
+        results.innerHTML = `
+          <div class="p-2.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between text-xs">
+            <div>
+              <p class="font-bold text-white">sample_video_1080p.mkv</p>
+              <p class="text-[10px] text-slate-400">Found in /Movies/ • 1.4 GB</p>
+            </div>
+            <button onclick="playMedia('Local: Sample Video', 'https://vjs.zencdn.net/v/oceans.mp4'); closeDownloadsModal();" class="px-2.5 py-1 bg-brand-cyan text-black font-bold text-[11px] rounded-lg">Play Local</button>
+          </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+        showToast("Discovered 1 local media file");
+      }, 1000);
+    };
+
+    // ========================================================
+    // SEARCH MODAL (SEARCHES LIVE FIRESTORE DATA DIRECTLY)
+    // ========================================================
+    window.openSearchModal = () => {
+      const modal = document.getElementById('searchModal');
+      modal.classList.remove('hidden');
+      document.getElementById('searchInput').focus();
+      handleSearchQuery('');
+    };
+
+    window.closeSearchModal = () => {
+      document.getElementById('searchModal').classList.add('hidden');
+    };
+
+    window.setSearchTerm = (term) => {
+      const input = document.getElementById('searchInput');
+      input.value = term;
+      handleSearchQuery(term);
+    };
+
+    window.handleSearchQuery = (query) => {
+      const container = document.getElementById('searchResults');
+      const catalog = (window.groupedShows && window.groupedShows.length > 0) 
+        ? window.groupedShows 
+        : (window.firestoreEpisodes || []);
+
+      const q = (query || '').toLowerCase().trim();
+      const filtered = catalog.filter(m => {
+        const t = (m.title || m.seriesTitle || '').toLowerCase();
+        const c = (m.category || '').toLowerCase();
+        return !q || t.includes(q) || c.includes(q);
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-xs text-slate-400">
+            ${catalog.length === 0 ? 'No titles published in Firestore yet. Add episodes via Creator Studio.' : `No titles found matching "${query}".`}
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(m => {
+        const safeTitle = (m.title || m.seriesTitle || 'Untitled').replace(/'/g, "\\'");
+        const safeUrl = (m.videoUrl || (m.episodes && m.episodes[0] && m.episodes[0].videoUrl) || '').replace(/'/g, "\\'");
+        const safeImg = (m.image || '').replace(/'/g, "\\'");
+        const safeCat = (m.category || 'Anime').replace(/'/g, "\\'");
+        const epCount = m.episodes ? (Array.isArray(m.episodes) ? m.episodes.length : m.episodes) : 'Stream Ready';
+        const epLabel = typeof epCount === 'number' ? `${epCount} Episodes` : epCount;
+
+        return `
+          <div class="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition cursor-pointer" onclick="if(window.openShowPlayerPage){ openShowPlayerPage('${safeTitle}'); } else { playMedia('${safeTitle}', '${safeUrl}', 0, { id: '${m.id}', image: '${safeImg}', category: '${safeCat}' }); } closeSearchModal();">
+            <div class="flex items-center gap-3">
+              <img src="${m.image || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80'}" class="w-14 h-14 rounded-xl object-cover">
+              <div>
+                <h4 class="font-bold text-xs text-white">${m.title || m.seriesTitle}</h4>
+                <p class="text-[11px] text-slate-400">${(m.category || 'Anime').toUpperCase()} • <span class="text-brand-cyan">${epLabel}</span> • ${m.rating || '9.9'} ★</p>
+              </div>
+            </div>
+            <button class="px-3 py-1.5 rounded-xl bg-brand-cyan text-black font-extrabold text-xs shadow-neon-cyan">
+              Watch
+            </button>
+          </div>
+        `;
+      }).join('');
+    };
+
+    // ========================================================
+    // TOAST NOTIFICATIONS & HERO MUTE
+    // ========================================================
+    window.showToast = (msg) => {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      if (!toast || !toastMsg) return;
+      toastMsg.innerText = msg;
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 3000);
+    };
+
+    window.toggleHeroMute = () => {
+      showToast("Cinematic Sound FX: Toggled");
+    };
+
+    // ========================================================
+    // INITIALIZATION ON DOM CONTENT LOADED
+    // ========================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      enforceSecretAdminRule(currentUser);
+      renderContinueWatching();
+      if (window.lucide) lucide.createIcons();
+
+      // Keyboard shortcut ⌘K / Ctrl+K for search
+      window.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          openSearchModal();
+        }
+      });
+    });
+
+    // Expose helpers globally
+    window.renderContinueWatching = renderContinueWatching;
+    window.saveContinueWatchingProgress = saveContinueWatchingProgress;
+    window.enforceSecretAdminRule = enforceSecretAdminRule;
+  </script>
+</body>
+</html>
